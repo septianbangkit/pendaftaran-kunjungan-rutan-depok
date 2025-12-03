@@ -1,42 +1,49 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { InstitutionLogo } from "@/components/InstitutionLogo";
 import { 
-  getCurrentCalled, 
-  getWaitingCount, 
   subscribeToChanges,
   getInitialState,
-  QueueTicket 
+  QueueTicket,
+  CalledByLoket
 } from "@/lib/queueStore";
 import { announceQueue } from "@/lib/tts";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { Users } from "lucide-react";
+import { Users, Play } from "lucide-react";
 
 const Display = () => {
-  const [currentCalled, setCurrentCalled] = useState<QueueTicket | null>(null);
+  const [calledByLoket, setCalledByLoket] = useState<CalledByLoket>({ 1: null, 2: null, 3: null });
   const [waitingCount, setWaitingCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [lastCalledId, setLastCalledId] = useState<string | null>(null);
+  const lastCalledRef = useRef<{ [key: number]: string | null }>({ 1: null, 2: null, 3: null });
 
   useEffect(() => {
     const state = getInitialState();
-    setCurrentCalled(state.currentCalled);
+    setCalledByLoket(state.calledByLoket);
     setWaitingCount(state.tickets.filter(t => t.status === 'waiting').length);
-    if (state.currentCalled) {
-      setLastCalledId(state.currentCalled.id);
+    
+    // Initialize last called IDs
+    for (let i = 1; i <= 3; i++) {
+      const loketKey = i as 1 | 2 | 3;
+      lastCalledRef.current[i] = state.calledByLoket[loketKey]?.id || null;
     }
 
     const unsubscribe = subscribeToChanges(async (state) => {
-      const newCalled = state.currentCalled;
       setWaitingCount(state.tickets.filter(t => t.status === 'waiting').length);
+      setCalledByLoket(state.calledByLoket);
       
-      // Announce if there's a new number called
-      if (newCalled && newCalled.id !== lastCalledId) {
-        setCurrentCalled(newCalled);
-        setLastCalledId(newCalled.id);
-        await announceQueue(newCalled.formattedNumber, newCalled.loket || 1);
-      } else if (!newCalled) {
-        setCurrentCalled(null);
+      // Check each loket for new calls
+      for (let i = 1; i <= 3; i++) {
+        const loketKey = i as 1 | 2 | 3;
+        const newCalled = state.calledByLoket[loketKey];
+        const lastId = lastCalledRef.current[i];
+        
+        if (newCalled && newCalled.id !== lastId) {
+          lastCalledRef.current[i] = newCalled.id;
+          await announceQueue(newCalled.formattedNumber, i);
+        } else if (!newCalled) {
+          lastCalledRef.current[i] = null;
+        }
       }
     });
 
@@ -48,7 +55,43 @@ const Display = () => {
       unsubscribe();
       clearInterval(timer);
     };
-  }, [lastCalledId]);
+  }, []);
+
+  const LoketCard = ({ loket, ticket }: { loket: number; ticket: QueueTicket | null }) => (
+    <div 
+      className={`bg-card/10 backdrop-blur-md rounded-2xl border-2 p-6 transition-all duration-300 h-full flex flex-col justify-center ${
+        ticket 
+          ? 'border-gold shadow-glow animate-pulse-slow' 
+          : 'border-primary-foreground/20'
+      }`}
+    >
+      <div className="text-center">
+        <h3 className="text-xl font-bold text-primary-foreground/70 mb-2">
+          LOKET {loket}
+        </h3>
+        
+        {ticket ? (
+          <>
+            <div className="font-mono text-6xl md:text-7xl lg:text-8xl font-bold text-gold leading-none my-4">
+              {ticket.formattedNumber}
+            </div>
+            <div className="bg-gold/20 rounded-lg px-4 py-2 inline-block">
+              <span className="text-gold font-medium">Memanggil...</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="font-mono text-6xl md:text-7xl lg:text-8xl font-bold text-primary-foreground/20 leading-none my-4">
+              ---
+            </div>
+            <div className="bg-primary-foreground/10 rounded-lg px-4 py-2 inline-block">
+              <span className="text-primary-foreground/40">Standby</span>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-navy-dark via-navy to-navy-light flex flex-col overflow-hidden">
@@ -58,17 +101,17 @@ const Display = () => {
           <div className="flex items-center gap-4">
             <InstitutionLogo size="lg" />
             <div className="text-primary-foreground">
-              <h1 className="text-2xl md:text-3xl font-bold tracking-wide">
+              <h1 className="text-xl md:text-2xl font-bold tracking-wide">
                 KEMENTERIAN IMIGRASI DAN PEMASYARAKATAN
               </h1>
               <p className="text-gold text-lg font-medium">RUTAN KELAS I DEPOK</p>
             </div>
           </div>
           <div className="text-right text-primary-foreground">
-            <p className="text-lg">
+            <p className="text-sm md:text-base">
               {format(currentTime, "EEEE, dd MMMM yyyy", { locale: id })}
             </p>
-            <p className="text-5xl font-mono font-bold text-gold">
+            <p className="text-4xl md:text-5xl font-mono font-bold text-gold">
               {format(currentTime, "HH:mm:ss")}
             </p>
           </div>
@@ -76,73 +119,60 @@ const Display = () => {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex">
+      <main className="flex-1 flex p-4 gap-4">
         {/* Left Side - Video/Banner Area */}
-        <div className="hidden lg:flex w-1/3 p-6 items-center justify-center">
-          <div className="bg-card/10 backdrop-blur-md rounded-2xl border border-gold/20 p-8 w-full h-full flex flex-col items-center justify-center">
-            <InstitutionLogo size="xl" className="mb-6" />
-            <h2 className="text-2xl font-bold text-primary-foreground text-center mb-4">
-              LAYANAN KUNJUNGAN
-            </h2>
-            <p className="text-primary-foreground/70 text-center">
-              Silakan menunggu hingga nomor antrian Anda dipanggil
-            </p>
-            
-            <div className="mt-8 bg-gold/10 rounded-xl p-4 w-full">
-              <div className="flex items-center justify-center gap-2 text-gold">
-                <Users className="w-6 h-6" />
-                <span className="text-xl">
-                  <strong className="text-3xl">{waitingCount}</strong> menunggu
-                </span>
+        <div className="w-1/3 flex flex-col gap-4">
+          {/* Video Area */}
+          <div className="flex-1 bg-card/10 backdrop-blur-md rounded-2xl border border-gold/20 overflow-hidden relative min-h-[300px]">
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-navy-dark/50">
+              <div className="w-20 h-20 rounded-full bg-gold/20 flex items-center justify-center mb-4">
+                <Play className="w-10 h-10 text-gold" />
+              </div>
+              <p className="text-primary-foreground/50 text-sm">Video / Banner Area</p>
+              <p className="text-primary-foreground/30 text-xs mt-1">16:9 Placeholder</p>
+            </div>
+            {/* Uncomment to add video:
+            <video 
+              className="w-full h-full object-cover" 
+              autoPlay 
+              loop 
+              muted
+              src="/path-to-video.mp4"
+            />
+            */}
+          </div>
+          
+          {/* Waiting Count Card */}
+          <div className="bg-card/10 backdrop-blur-md rounded-2xl border border-gold/20 p-6">
+            <div className="flex items-center justify-center gap-3 text-primary-foreground">
+              <Users className="w-8 h-8 text-gold" />
+              <div className="text-center">
+                <p className="text-sm text-primary-foreground/60">Antrian Menunggu</p>
+                <p className="text-4xl font-bold text-gold">{waitingCount}</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Right Side - Queue Display */}
-        <div className="flex-1 p-6 flex items-center justify-center">
-          <div className="bg-card/10 backdrop-blur-md rounded-3xl border-2 border-gold/30 shadow-glow p-8 md:p-12 max-w-2xl w-full">
-            {currentCalled ? (
-              <div className="text-center fade-in">
-                <p className="text-2xl md:text-3xl font-medium text-primary-foreground/70 mb-4">
-                  NOMOR ANTRIAN
-                </p>
-                
-                <div className="relative">
-                  <div className="font-mono text-[120px] md:text-[180px] font-bold text-gold leading-none tracking-[8px] pulse-glow rounded-3xl py-4">
-                    {currentCalled.formattedNumber}
-                  </div>
-                  <div className="absolute -inset-4 bg-gold/10 rounded-3xl -z-10 blur-xl" />
-                </div>
-
-                <div className="mt-8 bg-primary/20 rounded-2xl p-6">
-                  <p className="text-xl text-primary-foreground/70">Silakan menuju</p>
-                  <p className="text-4xl md:text-6xl font-bold text-primary-foreground mt-2">
-                    LOKET <span className="text-gold">{currentCalled.loket}</span>
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-12">
-                <p className="text-3xl text-primary-foreground/50 mb-4">
-                  NOMOR ANTRIAN
-                </p>
-                <div className="font-mono text-[120px] md:text-[180px] font-bold text-primary-foreground/20 leading-none">
-                  ---
-                </div>
-                <p className="text-xl text-primary-foreground/40 mt-8">
-                  Menunggu panggilan...
-                </p>
-              </div>
-            )}
+        {/* Right Side - 3 Loket Display */}
+        <div className="w-2/3 flex flex-col gap-4">
+          {/* Top Row - Loket 1 & 2 */}
+          <div className="flex-1 grid grid-cols-2 gap-4">
+            <LoketCard loket={1} ticket={calledByLoket[1]} />
+            <LoketCard loket={2} ticket={calledByLoket[2]} />
+          </div>
+          
+          {/* Bottom Row - Loket 3 */}
+          <div className="flex-1">
+            <LoketCard loket={3} ticket={calledByLoket[3]} />
           </div>
         </div>
       </main>
 
       {/* Running Text Footer */}
-      <footer className="bg-gold h-16 flex items-center overflow-hidden">
+      <footer className="bg-gold h-14 flex items-center overflow-hidden">
         <div className="whitespace-nowrap running-text">
-          <span className="text-navy-dark font-bold text-xl px-8">
+          <span className="text-navy-dark font-bold text-lg px-8">
             KEMENTERIAN IMIGRASI DAN PEMASYARAKATAN — RUTAN KELAS I DEPOK — LAYANAN KUNJUNGAN — 
             SILAKAN MENUNGGU DENGAN TERTIB — TERIMA KASIH ATAS KUNJUNGAN ANDA —
             KEMENTERIAN IMIGRASI DAN PEMASYARAKATAN — RUTAN KELAS I DEPOK — LAYANAN KUNJUNGAN — 

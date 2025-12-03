@@ -8,7 +8,7 @@ import {
   recallCurrent, 
   skipCurrent, 
   markServed,
-  getCurrentCalled,
+  getCalledByLoket,
   getWaitingCount,
   subscribeToChanges,
   getInitialState,
@@ -36,13 +36,15 @@ const StaffPanel = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const { toast } = useToast();
 
+  const loketNum = parseInt(selectedLoket) as 1 | 2 | 3;
+
   useEffect(() => {
     const state = getInitialState();
-    setCurrentCalled(state.currentCalled);
+    setCurrentCalled(state.calledByLoket[loketNum] || null);
     setWaitingCount(state.tickets.filter(t => t.status === 'waiting').length);
 
     const unsubscribe = subscribeToChanges((state) => {
-      setCurrentCalled(state.currentCalled);
+      setCurrentCalled(state.calledByLoket[loketNum] || null);
       setWaitingCount(state.tickets.filter(t => t.status === 'waiting').length);
     });
 
@@ -54,7 +56,13 @@ const StaffPanel = () => {
       unsubscribe();
       clearInterval(timer);
     };
-  }, []);
+  }, [loketNum]);
+
+  // Update current called when loket changes
+  useEffect(() => {
+    const called = getCalledByLoket(loketNum);
+    setCurrentCalled(called);
+  }, [selectedLoket, loketNum]);
 
   const handleCallNext = async () => {
     const loket = parseInt(selectedLoket);
@@ -94,7 +102,8 @@ const StaffPanel = () => {
   };
 
   const handleSkip = () => {
-    if (skipCurrent()) {
+    const loket = parseInt(selectedLoket);
+    if (skipCurrent(loket)) {
       setCurrentCalled(null);
       toast({
         title: "Nomor Dilewati",
@@ -104,7 +113,8 @@ const StaffPanel = () => {
   };
 
   const handleServed = () => {
-    if (markServed()) {
+    const loket = parseInt(selectedLoket);
+    if (markServed(loket)) {
       setCurrentCalled(null);
       toast({
         title: "Selesai Dilayani",
@@ -142,7 +152,7 @@ const StaffPanel = () => {
           <Card className="shadow-elevated border-2 border-primary/20">
             <CardHeader className="bg-primary/5">
               <CardTitle className="flex items-center justify-between">
-                <span>Nomor Saat Ini</span>
+                <span>Loket {selectedLoket} - Nomor Saat Ini</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -195,7 +205,7 @@ const StaffPanel = () => {
                     <SelectValue placeholder="Pilih Loket" />
                   </SelectTrigger>
                   <SelectContent>
-                    {[1, 2, 3, 4, 5].map((num) => (
+                    {[1, 2, 3].map((num) => (
                       <SelectItem key={num} value={num.toString()}>
                         Loket {num}
                       </SelectItem>
