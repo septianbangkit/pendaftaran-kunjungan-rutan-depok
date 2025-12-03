@@ -11,11 +11,17 @@ export interface QueueTicket {
   calledAt?: Date;
 }
 
+export interface CalledByLoket {
+  1: QueueTicket | null;
+  2: QueueTicket | null;
+  3: QueueTicket | null;
+}
+
 export interface QueueState {
   tickets: QueueTicket[];
   currentNumber: number;
   lastReset: string;
-  currentCalled: QueueTicket | null;
+  calledByLoket: CalledByLoket;
 }
 
 const STORAGE_KEY = 'queue_state';
@@ -28,6 +34,18 @@ const getTodayString = () => {
 const formatQueueNumber = (num: number): string => {
   return String(num).padStart(3, '0');
 };
+
+const parseTicket = (t: any): QueueTicket => ({
+  ...t,
+  createdAt: new Date(t.createdAt),
+  calledAt: t.calledAt ? new Date(t.calledAt) : undefined,
+});
+
+const parseCalledByLoket = (data: any): CalledByLoket => ({
+  1: data?.[1] ? parseTicket(data[1]) : null,
+  2: data?.[2] ? parseTicket(data[2]) : null,
+  3: data?.[3] ? parseTicket(data[3]) : null,
+});
 
 export const getInitialState = (): QueueState => {
   const today = getTodayString();
@@ -42,21 +60,29 @@ export const getInitialState = (): QueueState => {
           tickets: [],
           currentNumber: 0,
           lastReset: today,
-          currentCalled: null,
+          calledByLoket: { 1: null, 2: null, 3: null },
         };
       }
+      
+      // Handle migration from old format
+      if (parsed.currentCalled && !parsed.calledByLoket) {
+        const loket = parsed.currentCalled.loket || 1;
+        return {
+          tickets: parsed.tickets.map(parseTicket),
+          currentNumber: parsed.currentNumber,
+          lastReset: parsed.lastReset,
+          calledByLoket: {
+            1: loket === 1 ? parseTicket(parsed.currentCalled) : null,
+            2: loket === 2 ? parseTicket(parsed.currentCalled) : null,
+            3: loket === 3 ? parseTicket(parsed.currentCalled) : null,
+          },
+        };
+      }
+      
       return {
         ...parsed,
-        tickets: parsed.tickets.map((t: any) => ({
-          ...t,
-          createdAt: new Date(t.createdAt),
-          calledAt: t.calledAt ? new Date(t.calledAt) : undefined,
-        })),
-        currentCalled: parsed.currentCalled ? {
-          ...parsed.currentCalled,
-          createdAt: new Date(parsed.currentCalled.createdAt),
-          calledAt: parsed.currentCalled.calledAt ? new Date(parsed.currentCalled.calledAt) : undefined,
-        } : null,
+        tickets: parsed.tickets.map(parseTicket),
+        calledByLoket: parseCalledByLoket(parsed.calledByLoket),
       };
     } catch {
       // Invalid stored data
@@ -67,7 +93,7 @@ export const getInitialState = (): QueueState => {
     tickets: [],
     currentNumber: 0,
     lastReset: today,
-    currentCalled: null,
+    calledByLoket: { 1: null, 2: null, 3: null },
   };
 };
 
@@ -110,48 +136,66 @@ export const callNext = (loket: number): QueueTicket | null => {
   next.loket = loket;
   next.calledAt = new Date();
   
-  state.currentCalled = next;
-  saveState(state);
+  const loketKey = loket as 1 | 2 | 3;
+  if (loketKey >= 1 && loketKey <= 3) {
+    state.calledByLoket[loketKey] = next;
+  }
   
+  saveState(state);
   return next;
 };
 
 export const recallCurrent = (loket: number): QueueTicket | null => {
   const state = getInitialState();
-  if (!state.currentCalled) return null;
+  const loketKey = loket as 1 | 2 | 3;
   
-  state.currentCalled.calledAt = new Date();
-  state.currentCalled.loket = loket;
+  if (loketKey < 1 || loketKey > 3) return null;
+  
+  const current = state.calledByLoket[loketKey];
+  if (!current) return null;
+  
+  current.calledAt = new Date();
+  state.calledByLoket[loketKey] = current;
   saveState(state);
   
-  return state.currentCalled;
+  return current;
 };
 
-export const skipCurrent = (): boolean => {
+export const skipCurrent = (loket: number): boolean => {
   const state = getInitialState();
-  if (!state.currentCalled) return false;
+  const loketKey = loket as 1 | 2 | 3;
   
-  const ticket = state.tickets.find(t => t.id === state.currentCalled?.id);
+  if (loketKey < 1 || loketKey > 3) return false;
+  
+  const current = state.calledByLoket[loketKey];
+  if (!current) return false;
+  
+  const ticket = state.tickets.find(t => t.id === current.id);
   if (ticket) {
     ticket.status = 'skipped';
   }
   
-  state.currentCalled = null;
+  state.calledByLoket[loketKey] = null;
   saveState(state);
   
   return true;
 };
 
-export const markServed = (): boolean => {
+export const markServed = (loket: number): boolean => {
   const state = getInitialState();
-  if (!state.currentCalled) return false;
+  const loketKey = loket as 1 | 2 | 3;
   
-  const ticket = state.tickets.find(t => t.id === state.currentCalled?.id);
+  if (loketKey < 1 || loketKey > 3) return false;
+  
+  const current = state.calledByLoket[loketKey];
+  if (!current) return false;
+  
+  const ticket = state.tickets.find(t => t.id === current.id);
   if (ticket) {
     ticket.status = 'served';
   }
   
-  state.currentCalled = null;
+  state.calledByLoket[loketKey] = null;
   saveState(state);
   
   return true;
@@ -162,9 +206,11 @@ export const getWaitingCount = (): number => {
   return state.tickets.filter(t => t.status === 'waiting').length;
 };
 
-export const getCurrentCalled = (): QueueTicket | null => {
+export const getCalledByLoket = (loket: number): QueueTicket | null => {
   const state = getInitialState();
-  return state.currentCalled;
+  const loketKey = loket as 1 | 2 | 3;
+  if (loketKey < 1 || loketKey > 3) return null;
+  return state.calledByLoket[loketKey];
 };
 
 export const subscribeToChanges = (callback: (state: QueueState) => void) => {
@@ -174,16 +220,8 @@ export const subscribeToChanges = (callback: (state: QueueState) => void) => {
         const parsed = JSON.parse(e.newValue);
         callback({
           ...parsed,
-          tickets: parsed.tickets.map((t: any) => ({
-            ...t,
-            createdAt: new Date(t.createdAt),
-            calledAt: t.calledAt ? new Date(t.calledAt) : undefined,
-          })),
-          currentCalled: parsed.currentCalled ? {
-            ...parsed.currentCalled,
-            createdAt: new Date(parsed.currentCalled.createdAt),
-            calledAt: parsed.currentCalled.calledAt ? new Date(parsed.currentCalled.calledAt) : undefined,
-          } : null,
+          tickets: parsed.tickets.map(parseTicket),
+          calledByLoket: parseCalledByLoket(parsed.calledByLoket),
         });
       } catch {
         // Invalid data
