@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
 import { InstitutionLogo } from "@/components/InstitutionLogo";
-import { QueueTicket } from "@/components/QueueTicket";
 import { Button } from "@/components/ui/button";
-import { takeNumber, getWaitingCount, QueueTicket as QueueTicketType, subscribeToChanges, getInitialState } from "@/lib/queueStore";
+import { takeNumber, getWaitingCount, subscribeToChanges } from "@/lib/queueStore";
+import { printTicketDirectly } from "@/lib/printTicket";
 import { Ticket, Users } from "lucide-react";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
 const Kiosk = () => {
-  const [currentTicket, setCurrentTicket] = useState<QueueTicketType | null>(null);
   const [waitingCount, setWaitingCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -31,30 +30,10 @@ const Kiosk = () => {
 
   const handleTakeNumber = () => {
     const ticket = takeNumber();
-    setCurrentTicket(ticket);
+    // Langsung cetak PDF tanpa konfirmasi
+    printTicketDirectly(ticket);
     setWaitingCount(getWaitingCount());
   };
-
-  const handleBack = () => {
-    setCurrentTicket(null);
-  };
-
-  if (currentTicket) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-muted to-background flex flex-col items-center justify-center p-6">
-        <div className="fade-in">
-          <QueueTicket ticket={currentTicket} onPrint={handleBack} />
-        </div>
-        <Button 
-          variant="outline" 
-          className="mt-6 no-print"
-          onClick={handleBack}
-        >
-          Ambil Nomor Lagi
-        </Button>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-navy-dark via-navy to-navy-light flex flex-col">

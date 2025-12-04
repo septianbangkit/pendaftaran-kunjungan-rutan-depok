@@ -131,9 +131,9 @@
     @apply font-bold tracking-wider;
   }
 
-  .running-text {
-    animation: scroll-left 20s linear infinite;
-  }
+.running-text {
+  animation: scroll-left 60s linear infinite;
+}
 
   .pulse-glow {
     animation: pulse-glow 2s ease-in-out infinite;
