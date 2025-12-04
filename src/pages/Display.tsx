@@ -13,7 +13,7 @@ import {
 import { announceQueue } from "@/lib/tts";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
-import { Users, Play, Keyboard } from "lucide-react";
+import { Users, Play } from "lucide-react";
 
 const Display = () => {
   const [calledByLoket, setCalledByLoket] = useState<CalledByLoket>({ 1: null, 2: null, 3: null });
@@ -194,14 +194,6 @@ const Display = () => {
               </div>
             </div>
             
-            {/* Keyboard Shortcut Indicator */}
-            <div className="bg-card/10 backdrop-blur-md rounded-2xl border border-gold/20 p-4 flex items-center gap-3">
-              <Keyboard className="w-6 h-6 text-gold/60" />
-              <div className="text-xs text-primary-foreground/50">
-                <p><span className="text-gold font-mono">1-3</span> Panggil</p>
-                <p><span className="text-gold font-mono">7-9</span> Ulang</p>
-              </div>
-            </div>
           </div>
         </div>
 
