@@ -1,21 +1,24 @@
 import { useState, useEffect } from "react";
 import { InstitutionLogo } from "@/components/InstitutionLogo";
 import { Button } from "@/components/ui/button";
-import { takeNumber, getWaitingCount, subscribeToChanges } from "@/lib/queueStore";
+import { takeNumber, getWaitingCount, subscribeToChanges, ServiceType } from "@/lib/queueStore";
 import { printTicketDirectly } from "@/lib/printTicket";
-import { Ticket, Users } from "lucide-react";
+import { UserPlus, MessageCircleQuestion, Users } from "lucide-react";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 
 const Kiosk = () => {
-  const [waitingCount, setWaitingCount] = useState(0);
+  const [waitingCountA, setWaitingCountA] = useState(0);
+  const [waitingCountB, setWaitingCountB] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-    setWaitingCount(getWaitingCount());
+    setWaitingCountA(getWaitingCount('A'));
+    setWaitingCountB(getWaitingCount('B'));
     
     const unsubscribe = subscribeToChanges((state) => {
-      setWaitingCount(state.tickets.filter(t => t.status === 'waiting').length);
+      setWaitingCountA(state.tickets.filter(t => t.status === 'waiting' && t.serviceType === 'A').length);
+      setWaitingCountB(state.tickets.filter(t => t.status === 'waiting' && t.serviceType === 'B').length);
     });
 
     const timer = setInterval(() => {
@@ -28,11 +31,9 @@ const Kiosk = () => {
     };
   }, []);
 
-  const handleTakeNumber = () => {
-    const ticket = takeNumber();
-    // Langsung cetak PDF tanpa konfirmasi
+  const handleTakeNumber = (serviceType: ServiceType) => {
+    const ticket = takeNumber(serviceType);
     printTicketDirectly(ticket);
-    setWaitingCount(getWaitingCount());
   };
 
   return (
@@ -61,29 +62,56 @@ const Kiosk = () => {
           </p>
         </div>
 
-        <div className="bg-card/10 backdrop-blur-md rounded-2xl p-8 md:p-12 border border-gold/30 shadow-glow max-w-lg w-full">
+        <div className="bg-card/10 backdrop-blur-md rounded-2xl p-8 md:p-12 border border-gold/30 shadow-glow max-w-3xl w-full">
           <div className="text-center mb-8">
             <h2 className="text-2xl md:text-3xl font-bold text-primary-foreground mb-2">
-              LAYANAN KUNJUNGAN
+              PILIH LAYANAN
             </h2>
             <p className="text-primary-foreground/70">
-              Silakan ambil nomor antrian Anda
+              Silakan pilih layanan dan ambil nomor antrian Anda
             </p>
           </div>
 
-          <Button
-            onClick={handleTakeNumber}
-            className="w-full h-24 md:h-32 text-xl md:text-2xl font-bold bg-gradient-to-br from-gold to-gold-dark hover:from-gold-light hover:to-gold text-navy-dark rounded-xl shadow-elevated transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] animate-pulse-scale"
-          >
-            <Ticket className="w-8 h-8 md:w-10 md:h-10 mr-3" />
-            AMBIL NOMOR ANTRIAN
-          </Button>
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Layanan Pendaftaran Kunjungan */}
+            <div className="bg-card/10 rounded-xl p-6 border border-gold/20">
+              <Button
+                onClick={() => handleTakeNumber('A')}
+                className="w-full h-32 md:h-40 text-lg md:text-xl font-bold bg-gradient-to-br from-gold to-gold-dark hover:from-gold-light hover:to-gold text-navy-dark rounded-xl shadow-elevated transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex flex-col gap-3"
+              >
+                <UserPlus className="w-10 h-10 md:w-12 md:h-12" />
+                <span className="leading-tight">LAYANAN<br/>PENDAFTARAN<br/>KUNJUNGAN</span>
+              </Button>
+              <div className="mt-4 flex items-center justify-center gap-2 text-primary-foreground/70">
+                <Users className="w-4 h-4" />
+                <span className="text-sm">
+                  <strong className="text-gold">{waitingCountA}</strong> orang menunggu
+                </span>
+              </div>
+              <p className="text-center text-primary-foreground/50 text-xs mt-2">
+                Loket 1, 2, 3
+              </p>
+            </div>
 
-          <div className="mt-8 flex items-center justify-center gap-2 text-primary-foreground/70">
-            <Users className="w-5 h-5" />
-            <span>
-              <strong className="text-gold">{waitingCount}</strong> orang sedang menunggu
-            </span>
+            {/* Layanan Informasi dan Pengaduan */}
+            <div className="bg-card/10 rounded-xl p-6 border border-gold/20">
+              <Button
+                onClick={() => handleTakeNumber('B')}
+                className="w-full h-32 md:h-40 text-lg md:text-xl font-bold bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white rounded-xl shadow-elevated transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] flex flex-col gap-3"
+              >
+                <MessageCircleQuestion className="w-10 h-10 md:w-12 md:h-12" />
+                <span className="leading-tight">LAYANAN<br/>INFORMASI &<br/>PENGADUAN</span>
+              </Button>
+              <div className="mt-4 flex items-center justify-center gap-2 text-primary-foreground/70">
+                <Users className="w-4 h-4" />
+                <span className="text-sm">
+                  <strong className="text-emerald-400">{waitingCountB}</strong> orang menunggu
+                </span>
+              </div>
+              <p className="text-center text-primary-foreground/50 text-xs mt-2">
+                Loket 4
+              </p>
+            </div>
           </div>
         </div>
       </main>
