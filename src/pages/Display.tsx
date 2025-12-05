@@ -71,6 +71,9 @@ const Display = () => {
             announceQueueEmpty();
           }, 2500);
         }
+      } else {
+        // Tidak ada antrian, beritahu admin
+        announceQueueEmpty();
       }
     }
     
