@@ -8,22 +8,46 @@ import {
   callNext,
   recallCurrent,
   markServed,
-  getCalledByLoket
+  getCalledByLoket,
+  resetQueue,
+  isLastWaiting
 } from "@/lib/queueStore";
-import { announceQueue } from "@/lib/tts";
+import { announceQueue, announceQueueEmpty } from "@/lib/tts";
 import { format } from "date-fns";
 import { id } from "date-fns/locale";
 import { Users, Play } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const Display = () => {
   const [calledByLoket, setCalledByLoket] = useState<CalledByLoket>({ 1: null, 2: null, 3: null });
   const [waitingCount, setWaitingCount] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showResetDialog, setShowResetDialog] = useState(false);
   const lastCalledRef = useRef<{ [key: number]: string | null }>({ 1: null, 2: null, 3: null });
+
+  const handleResetConfirm = () => {
+    resetQueue();
+    setShowResetDialog(false);
+  };
 
   // Keyboard handler for loket controls
   const handleKeyPress = useCallback(async (e: KeyboardEvent) => {
     const key = e.key;
+    
+    // Tombol 0 - Reset antrian
+    if (key === '0') {
+      setShowResetDialog(true);
+      return;
+    }
     
     // Tombol 1, 2, 3 - Call next (auto-serve jika ada aktif)
     if (['1', '2', '3'].includes(key)) {
@@ -39,6 +63,14 @@ const Display = () => {
       const ticket = callNext(loket);
       if (ticket) {
         await announceQueue(ticket.formattedNumber, loket);
+        
+        // Cek apakah ini antrian terakhir
+        if (isLastWaiting()) {
+          // Delay sedikit agar pengumuman nomor selesai dulu
+          setTimeout(() => {
+            announceQueueEmpty();
+          }, 2500);
+        }
       }
     }
     
@@ -133,7 +165,33 @@ const Display = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-navy-dark via-navy to-navy-light flex flex-col overflow-hidden">
+    <>
+      {/* Reset Confirmation Dialog */}
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent className="bg-navy border-gold/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-primary-foreground">
+              Reset Antrian
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-primary-foreground/70">
+              Apakah Anda yakin ingin mereset antrian? Semua nomor antrian akan dihapus.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20 hover:bg-primary-foreground/20">
+              No
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleResetConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Yes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="min-h-screen bg-gradient-to-br from-navy-dark via-navy to-navy-light flex flex-col overflow-hidden">
       {/* Header */}
       <header className="bg-navy-dark/80 backdrop-blur-sm border-b-2 border-gold/30 p-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -217,6 +275,7 @@ const Display = () => {
         </div>
       </footer>
     </div>
+    </>
   );
 };
 
