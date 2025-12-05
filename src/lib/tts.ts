@@ -22,8 +22,28 @@ const loketWords: { [key: number]: string } = {
   5: 'lima',
 };
 
+// Convert number to Indonesian words (e.g., "001" → "satu", "012" → "dua belas")
+const numberToIndonesian = (n: number): string => {
+  if (n === 0) return 'nol';
+  if (n <= 9) return numberWords[n.toString()];
+  if (n === 10) return 'sepuluh';
+  if (n === 11) return 'sebelas';
+  if (n < 20) return numberWords[(n - 10).toString()] + ' belas';
+  if (n < 100) {
+    const puluhan = Math.floor(n / 10);
+    const satuan = n % 10;
+    return numberWords[puluhan.toString()] + ' puluh' + (satuan ? ' ' + numberWords[satuan.toString()] : '');
+  }
+  // 100-999
+  const ratusan = Math.floor(n / 100);
+  const sisa = n % 100;
+  const ratusanWord = ratusan === 1 ? 'seratus' : numberWords[ratusan.toString()] + ' ratus';
+  return ratusanWord + (sisa ? ' ' + numberToIndonesian(sisa) : '');
+};
+
 export const formatNumberForSpeech = (num: string): string => {
-  return num.split('').map(digit => numberWords[digit] || digit).join(', ');
+  const number = parseInt(num, 10);
+  return numberToIndonesian(number);
 };
 
 // Find the best Indonesian female voice
@@ -91,6 +111,36 @@ export const announceQueue = (queueNumber: string, loket: number): Promise<void>
     };
 
     // Small delay to ensure voices are loaded
+    setTimeout(() => {
+      window.speechSynthesis.speak(utterance);
+    }, 100);
+  });
+};
+
+export const announceQueueEmpty = (): Promise<void> => {
+  return new Promise((resolve) => {
+    if (!('speechSynthesis' in window)) {
+      resolve();
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    
+    const text = 'Antrian sudah habis';
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'id-ID';
+    utterance.rate = 0.85;
+    utterance.pitch = 1.1;
+    utterance.volume = 1;
+
+    const voice = findBestVoice();
+    if (voice) {
+      utterance.voice = voice;
+    }
+
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+
     setTimeout(() => {
       window.speechSynthesis.speak(utterance);
     }, 100);

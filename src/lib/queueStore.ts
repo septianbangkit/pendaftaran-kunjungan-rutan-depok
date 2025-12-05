@@ -213,6 +213,22 @@ export const getCalledByLoket = (loket: number): QueueTicket | null => {
   return state.calledByLoket[loketKey];
 };
 
+export const resetQueue = (): void => {
+  const today = getTodayString();
+  const newState: QueueState = {
+    tickets: [],
+    currentNumber: 0,
+    lastReset: today,
+    calledByLoket: { 1: null, 2: null, 3: null },
+  };
+  saveState(newState);
+};
+
+export const isLastWaiting = (): boolean => {
+  const state = getInitialState();
+  return state.tickets.filter(t => t.status === 'waiting').length === 0;
+};
+
 export const subscribeToChanges = (callback: (state: QueueState) => void) => {
   const handler = (e: StorageEvent) => {
     if (e.key === STORAGE_KEY && e.newValue) {
