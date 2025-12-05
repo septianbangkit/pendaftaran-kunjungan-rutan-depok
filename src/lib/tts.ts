@@ -22,7 +22,7 @@ const loketWords: { [key: number]: string } = {
   5: 'lima',
 };
 
-// Convert number to Indonesian words (e.g., "001" → "satu", "012" → "dua belas")
+// Convert number to Indonesian words (e.g., 1 → "satu", 12 → "dua belas")
 const numberToIndonesian = (n: number): string => {
   if (n === 0) return 'nol';
   if (n <= 9) return numberWords[n.toString()];
@@ -41,9 +41,17 @@ const numberToIndonesian = (n: number): string => {
   return ratusanWord + (sisa ? ' ' + numberToIndonesian(sisa) : '');
 };
 
-export const formatNumberForSpeech = (num: string): string => {
-  const number = parseInt(num, 10);
-  return numberToIndonesian(number);
+// Format queue number for speech (handles A001, B001 format)
+export const formatNumberForSpeech = (formattedNumber: string): string => {
+  // Extract prefix (A or B) and number
+  const prefix = formattedNumber.charAt(0);
+  const numPart = formattedNumber.slice(1);
+  const number = parseInt(numPart, 10);
+  
+  const prefixWord = prefix === 'A' ? 'A' : 'B';
+  const numberWord = numberToIndonesian(number);
+  
+  return `${prefixWord} ${numberWord}`;
 };
 
 // Find the best Indonesian female voice

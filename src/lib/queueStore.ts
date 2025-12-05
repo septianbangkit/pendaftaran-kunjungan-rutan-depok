@@ -1,9 +1,12 @@
 // Simple in-memory queue store with localStorage persistence
-// For production, this should be replaced with Supabase/database
+// Supports two service types: A (Pendaftaran) and B (Informasi)
+
+export type ServiceType = 'A' | 'B';
 
 export interface QueueTicket {
   id: string;
   number: number;
+  serviceType: ServiceType;
   formattedNumber: string;
   createdAt: Date;
   status: 'waiting' | 'called' | 'served' | 'skipped';
@@ -15,11 +18,13 @@ export interface CalledByLoket {
   1: QueueTicket | null;
   2: QueueTicket | null;
   3: QueueTicket | null;
+  4: QueueTicket | null;
 }
 
 export interface QueueState {
   tickets: QueueTicket[];
-  currentNumber: number;
+  currentNumberA: number; // Counter for A tickets
+  currentNumberB: number; // Counter for B tickets
   lastReset: string;
   calledByLoket: CalledByLoket;
 }
@@ -31,8 +36,8 @@ const getTodayString = () => {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 };
 
-const formatQueueNumber = (num: number): string => {
-  return String(num).padStart(3, '0');
+const formatQueueNumber = (num: number, serviceType: ServiceType): string => {
+  return `${serviceType}${String(num).padStart(3, '0')}`;
 };
 
 const parseTicket = (t: any): QueueTicket => ({
@@ -45,6 +50,14 @@ const parseCalledByLoket = (data: any): CalledByLoket => ({
   1: data?.[1] ? parseTicket(data[1]) : null,
   2: data?.[2] ? parseTicket(data[2]) : null,
   3: data?.[3] ? parseTicket(data[3]) : null,
+  4: data?.[4] ? parseTicket(data[4]) : null,
+});
+
+const getEmptyCalledByLoket = (): CalledByLoket => ({
+  1: null,
+  2: null,
+  3: null,
+  4: null,
 });
 
 export const getInitialState = (): QueueState => {
@@ -58,24 +71,25 @@ export const getInitialState = (): QueueState => {
       if (parsed.lastReset !== today) {
         return {
           tickets: [],
-          currentNumber: 0,
+          currentNumberA: 0,
+          currentNumberB: 0,
           lastReset: today,
-          calledByLoket: { 1: null, 2: null, 3: null },
+          calledByLoket: getEmptyCalledByLoket(),
         };
       }
       
       // Handle migration from old format
-      if (parsed.currentCalled && !parsed.calledByLoket) {
-        const loket = parsed.currentCalled.loket || 1;
+      if (parsed.currentNumber !== undefined && parsed.currentNumberA === undefined) {
         return {
-          tickets: parsed.tickets.map(parseTicket),
-          currentNumber: parsed.currentNumber,
+          tickets: parsed.tickets.map((t: any) => ({
+            ...parseTicket(t),
+            serviceType: 'A',
+            formattedNumber: `A${String(t.number).padStart(3, '0')}`,
+          })),
+          currentNumberA: parsed.currentNumber,
+          currentNumberB: 0,
           lastReset: parsed.lastReset,
-          calledByLoket: {
-            1: loket === 1 ? parseTicket(parsed.currentCalled) : null,
-            2: loket === 2 ? parseTicket(parsed.currentCalled) : null,
-            3: loket === 3 ? parseTicket(parsed.currentCalled) : null,
-          },
+          calledByLoket: parseCalledByLoket(parsed.calledByLoket),
         };
       }
       
@@ -91,9 +105,10 @@ export const getInitialState = (): QueueState => {
   
   return {
     tickets: [],
-    currentNumber: 0,
+    currentNumberA: 0,
+    currentNumberB: 0,
     lastReset: today,
-    calledByLoket: { 1: null, 2: null, 3: null },
+    calledByLoket: getEmptyCalledByLoket(),
   };
 };
 
@@ -106,28 +121,50 @@ export const saveState = (state: QueueState) => {
   }));
 };
 
-export const takeNumber = (): QueueTicket => {
+export const takeNumber = (serviceType: ServiceType): QueueTicket => {
   const state = getInitialState();
-  const newNumber = state.currentNumber + 1;
+  
+  let newNumber: number;
+  if (serviceType === 'A') {
+    newNumber = state.currentNumberA + 1;
+    state.currentNumberA = newNumber;
+  } else {
+    newNumber = state.currentNumberB + 1;
+    state.currentNumberB = newNumber;
+  }
   
   const ticket: QueueTicket = {
-    id: `${getTodayString()}-${newNumber}`,
+    id: `${getTodayString()}-${serviceType}-${newNumber}`,
     number: newNumber,
-    formattedNumber: formatQueueNumber(newNumber),
+    serviceType,
+    formattedNumber: formatQueueNumber(newNumber, serviceType),
     createdAt: new Date(),
     status: 'waiting',
   };
   
   state.tickets.push(ticket);
-  state.currentNumber = newNumber;
   saveState(state);
   
   return ticket;
 };
 
+// Get allowed service types for a loket
+const getAllowedServiceType = (loket: number): ServiceType | null => {
+  if (loket >= 1 && loket <= 3) return 'A';
+  if (loket === 4) return 'B';
+  return null;
+};
+
 export const callNext = (loket: number): QueueTicket | null => {
   const state = getInitialState();
-  const waiting = state.tickets.filter(t => t.status === 'waiting');
+  const allowedType = getAllowedServiceType(loket);
+  
+  if (!allowedType) return null;
+  
+  // Filter waiting tickets by service type
+  const waiting = state.tickets.filter(t => 
+    t.status === 'waiting' && t.serviceType === allowedType
+  );
   
   if (waiting.length === 0) return null;
   
@@ -136,10 +173,8 @@ export const callNext = (loket: number): QueueTicket | null => {
   next.loket = loket;
   next.calledAt = new Date();
   
-  const loketKey = loket as 1 | 2 | 3;
-  if (loketKey >= 1 && loketKey <= 3) {
-    state.calledByLoket[loketKey] = next;
-  }
+  const loketKey = loket as 1 | 2 | 3 | 4;
+  state.calledByLoket[loketKey] = next;
   
   saveState(state);
   return next;
@@ -147,9 +182,9 @@ export const callNext = (loket: number): QueueTicket | null => {
 
 export const recallCurrent = (loket: number): QueueTicket | null => {
   const state = getInitialState();
-  const loketKey = loket as 1 | 2 | 3;
+  const loketKey = loket as 1 | 2 | 3 | 4;
   
-  if (loketKey < 1 || loketKey > 3) return null;
+  if (loketKey < 1 || loketKey > 4) return null;
   
   const current = state.calledByLoket[loketKey];
   if (!current) return null;
@@ -163,9 +198,9 @@ export const recallCurrent = (loket: number): QueueTicket | null => {
 
 export const skipCurrent = (loket: number): boolean => {
   const state = getInitialState();
-  const loketKey = loket as 1 | 2 | 3;
+  const loketKey = loket as 1 | 2 | 3 | 4;
   
-  if (loketKey < 1 || loketKey > 3) return false;
+  if (loketKey < 1 || loketKey > 4) return false;
   
   const current = state.calledByLoket[loketKey];
   if (!current) return false;
@@ -183,9 +218,9 @@ export const skipCurrent = (loket: number): boolean => {
 
 export const markServed = (loket: number): boolean => {
   const state = getInitialState();
-  const loketKey = loket as 1 | 2 | 3;
+  const loketKey = loket as 1 | 2 | 3 | 4;
   
-  if (loketKey < 1 || loketKey > 3) return false;
+  if (loketKey < 1 || loketKey > 4) return false;
   
   const current = state.calledByLoket[loketKey];
   if (!current) return false;
@@ -201,15 +236,23 @@ export const markServed = (loket: number): boolean => {
   return true;
 };
 
-export const getWaitingCount = (): number => {
+export const getWaitingCount = (serviceType?: ServiceType): number => {
   const state = getInitialState();
+  if (serviceType) {
+    return state.tickets.filter(t => t.status === 'waiting' && t.serviceType === serviceType).length;
+  }
   return state.tickets.filter(t => t.status === 'waiting').length;
+};
+
+export const getWaitingTickets = (serviceType: ServiceType): QueueTicket[] => {
+  const state = getInitialState();
+  return state.tickets.filter(t => t.status === 'waiting' && t.serviceType === serviceType);
 };
 
 export const getCalledByLoket = (loket: number): QueueTicket | null => {
   const state = getInitialState();
-  const loketKey = loket as 1 | 2 | 3;
-  if (loketKey < 1 || loketKey > 3) return null;
+  const loketKey = loket as 1 | 2 | 3 | 4;
+  if (loketKey < 1 || loketKey > 4) return null;
   return state.calledByLoket[loketKey];
 };
 
@@ -217,16 +260,17 @@ export const resetQueue = (): void => {
   const today = getTodayString();
   const newState: QueueState = {
     tickets: [],
-    currentNumber: 0,
+    currentNumberA: 0,
+    currentNumberB: 0,
     lastReset: today,
-    calledByLoket: { 1: null, 2: null, 3: null },
+    calledByLoket: getEmptyCalledByLoket(),
   };
   saveState(newState);
 };
 
-export const isLastWaiting = (): boolean => {
+export const isLastWaiting = (serviceType: ServiceType): boolean => {
   const state = getInitialState();
-  return state.tickets.filter(t => t.status === 'waiting').length === 0;
+  return state.tickets.filter(t => t.status === 'waiting' && t.serviceType === serviceType).length === 0;
 };
 
 export const subscribeToChanges = (callback: (state: QueueState) => void) => {

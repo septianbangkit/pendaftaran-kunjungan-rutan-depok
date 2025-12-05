@@ -65,7 +65,10 @@ export const printTicketDirectly = (ticket: QueueTicket) => {
   // Service type
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  doc.text('LAYANAN KUNJUNGAN', centerX, 100, { align: 'center' });
+  const serviceName = ticket.serviceType === 'A' 
+    ? 'LAYANAN PENDAFTARAN KUNJUNGAN' 
+    : 'LAYANAN INFORMASI & PENGADUAN';
+  doc.text(serviceName, centerX, 100, { align: 'center' });
   
   // Footer
   doc.setFontSize(7);
