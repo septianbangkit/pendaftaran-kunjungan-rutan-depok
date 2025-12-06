@@ -66,11 +66,11 @@ const Display = () => {
         
         if (isLastWaiting('A')) {
           setTimeout(() => {
-            announceQueueEmpty();
+            announceQueueEmpty('A');
           }, 2500);
         }
       } else {
-        announceQueueEmpty();
+        announceQueueEmpty('A');
       }
     }
     
@@ -88,11 +88,11 @@ const Display = () => {
         
         if (isLastWaiting('B')) {
           setTimeout(() => {
-            announceQueueEmpty();
+            announceQueueEmpty('B');
           }, 2500);
         }
       } else {
-        announceQueueEmpty();
+        announceQueueEmpty('B');
       }
     }
     
@@ -196,22 +196,13 @@ const Display = () => {
     </div>
   );
 
-  const WaitingList = ({ title, tickets, colorClass }: { title: string; tickets: QueueTicket[]; colorClass: string }) => (
+  const WaitingCount = ({ title, count, colorClass }: { title: string; count: number; colorClass: string }) => (
     <div className="bg-card/10 backdrop-blur-md rounded-xl border border-gold/20 p-3 flex-1">
       <h4 className={`text-sm font-bold ${colorClass} mb-2 text-center`}>{title}</h4>
-      <div className="flex flex-wrap gap-1 justify-center max-h-20 overflow-y-auto">
-        {tickets.length > 0 ? (
-          tickets.slice(0, 15).map(t => (
-            <span key={t.id} className="bg-primary-foreground/10 text-primary-foreground/70 text-xs px-2 py-1 rounded font-mono">
-              {t.formattedNumber}
-            </span>
-          ))
-        ) : (
-          <span className="text-primary-foreground/40 text-xs">Tidak ada antrian</span>
-        )}
-        {tickets.length > 15 && (
-          <span className="text-primary-foreground/50 text-xs">+{tickets.length - 15} lainnya</span>
-        )}
+      <div className="flex items-center justify-center gap-2">
+        <Users className={`w-5 h-5 ${colorClass}`} />
+        <span className="text-primary-foreground text-2xl font-bold">{count}</span>
+        <span className="text-primary-foreground/60 text-sm">Menunggu</span>
       </div>
     </div>
   );
@@ -279,16 +270,16 @@ const Display = () => {
               </div>
             </div>
             
-            {/* Waiting Lists */}
+            {/* Waiting Counts */}
             <div className="flex gap-3">
-              <WaitingList 
+              <WaitingCount 
                 title="Antrian Pendaftaran Kunjungan" 
-                tickets={waitingA} 
+                count={waitingA.length} 
                 colorClass="text-gold"
               />
-              <WaitingList 
+              <WaitingCount 
                 title="Antrian Informasi & Pengaduan" 
-                tickets={waitingB} 
+                count={waitingB.length} 
                 colorClass="text-emerald-400"
               />
             </div>

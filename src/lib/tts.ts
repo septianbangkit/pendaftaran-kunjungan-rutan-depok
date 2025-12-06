@@ -125,7 +125,9 @@ export const announceQueue = (queueNumber: string, loket: number): Promise<void>
   });
 };
 
-export const announceQueueEmpty = (): Promise<void> => {
+export type ServiceType = 'A' | 'B';
+
+export const announceQueueEmpty = (serviceType?: ServiceType): Promise<void> => {
   return new Promise((resolve) => {
     if (!('speechSynthesis' in window)) {
       resolve();
@@ -134,7 +136,15 @@ export const announceQueueEmpty = (): Promise<void> => {
 
     window.speechSynthesis.cancel();
     
-    const text = 'Antrian sudah habis';
+    let text: string;
+    if (serviceType === 'A') {
+      text = 'Antrian Layanan Pendaftaran Kunjungan sudah habis';
+    } else if (serviceType === 'B') {
+      text = 'Antrian Layanan Informasi dan Pengaduan sudah habis';
+    } else {
+      text = 'Antrian sudah habis';
+    }
+    
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'id-ID';
     utterance.rate = 0.85;
